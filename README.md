@@ -115,7 +115,7 @@ Please avoid unrelated refactors in bug-fix pull requests so changes are easy to
 ## Issues and feedback
 
 - Repository: https://github.com/aexinide/aex-search
-- Report bugs or request features through the repository's **Issues** tab.
+- Report bugs or request features through the repository's **[Issues](https://github.com/aexinide/aex-search/issues)** tab.
 
 ## License
 
