@@ -1,0 +1,17 @@
+{
+  "uuid": "aex-search@aexinide",
+  "name": "Aex Search",
+  "description": "Fast popup search for applications, files, folders and file contents.\n\nCtrl+Shift+S  search everything\nCtrl+Shift+F  files and folders only\nCtrl+Shift+A  applications only\nCtrl+Shift+G  search inside files\n\nLive results with highlighted matches and full paths. Recommended tools: fd-find and ripgrep.",
+  "shell-version": [
+    "45",
+    "46",
+    "47",
+    "48",
+    "49",
+    "50"
+  ],
+  "settings-schema": "org.gnome.shell.extensions.aex-search",
+  "url": "https://github.com/aexinide/aex-search",
+  "version": 1,
+  "version-name": "1.0.0"
+}

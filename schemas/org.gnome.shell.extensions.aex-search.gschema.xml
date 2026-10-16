@@ -1,0 +1,101 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<schemalist>
+  <schema id="org.gnome.shell.extensions.aex-search" path="/org/gnome/shell/extensions/aex-search/">
+
+    <key name="shortcut-all" type="as">
+      <default>['&lt;Control&gt;&lt;Shift&gt;s']</default>
+      <summary>Shortcut: search everything</summary>
+    </key>
+    <key name="shortcut-files" type="as">
+      <default>['&lt;Control&gt;&lt;Shift&gt;f']</default>
+      <summary>Shortcut: search files and folders only</summary>
+    </key>
+    <key name="shortcut-apps" type="as">
+      <default>['&lt;Control&gt;&lt;Shift&gt;a']</default>
+      <summary>Shortcut: search applications only</summary>
+    </key>
+    <key name="shortcut-content" type="as">
+      <default>['&lt;Control&gt;&lt;Shift&gt;g']</default>
+      <summary>Shortcut: search inside files</summary>
+    </key>
+
+    <key name="search-dirs" type="as">
+      <default>[]</default>
+      <summary>Folders to search (empty = home folder)</summary>
+    </key>
+    <key name="exclude-names" type="as">
+      <default>['node_modules', '.git', '__pycache__', '.cache', '.venv', 'snap']</default>
+      <summary>File or folder names to skip (simple * and ? globs allowed)</summary>
+    </key>
+    <key name="show-hidden" type="b">
+      <default>false</default>
+      <summary>Include hidden files and folders</summary>
+    </key>
+    <key name="include-folders" type="b">
+      <default>true</default>
+      <summary>Include folders in file results</summary>
+    </key>
+    <key name="case-sensitive" type="b">
+      <default>false</default>
+      <summary>Case-sensitive search</summary>
+    </key>
+    <key name="max-results" type="i">
+      <range min="10" max="2000"/>
+      <default>300</default>
+      <summary>Maximum number of results shown</summary>
+    </key>
+    <key name="search-tool" type="s">
+      <choices>
+        <choice value="auto"/>
+        <choice value="fd"/>
+        <choice value="find"/>
+        <choice value="plocate"/>
+      </choices>
+      <default>'auto'</default>
+      <summary>Tool used for file name search</summary>
+    </key>
+
+    <key name="content-tool" type="s">
+      <choices>
+        <choice value="auto"/>
+        <choice value="rg"/>
+        <choice value="grep"/>
+      </choices>
+      <default>'auto'</default>
+      <summary>Tool used for searching inside files</summary>
+    </key>
+    <key name="content-max-size-mb" type="i">
+      <range min="1" max="200"/>
+      <default>2</default>
+      <summary>Skip files larger than this when searching content (ripgrep only)</summary>
+    </key>
+    <key name="content-regex" type="b">
+      <default>false</default>
+      <summary>Treat the content query as a regular expression</summary>
+    </key>
+
+    <key name="theme" type="s">
+      <choices>
+        <choice value="system"/>
+        <choice value="dark"/>
+        <choice value="light"/>
+      </choices>
+      <default>'system'</default>
+      <summary>Popup theme</summary>
+    </key>
+    <key name="popup-width" type="i">
+      <range min="420" max="1400"/>
+      <default>760</default>
+      <summary>Popup width in pixels</summary>
+    </key>
+    <key name="show-recent" type="b">
+      <default>true</default>
+      <summary>Show recent files when the search box is empty</summary>
+    </key>
+    <key name="debounce-ms" type="i">
+      <range min="0" max="1000"/>
+      <default>120</default>
+      <summary>Delay after typing before searching (ms)</summary>
+    </key>
+  </schema>
+</schemalist>
