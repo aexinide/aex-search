@@ -79,18 +79,52 @@
         <choice value="system"/>
         <choice value="dark"/>
         <choice value="light"/>
+        <choice value="custom"/>
       </choices>
       <default>'system'</default>
       <summary>Popup theme</summary>
+    </key>
+    <key name="custom-bg" type="s">
+      <default>'#1e1e22'</default>
+      <summary>Custom theme: background color (hex)</summary>
+    </key>
+    <key name="custom-accent" type="s">
+      <default>'#3584e4'</default>
+      <summary>Custom theme: accent color (hex), used for the active tab and selected row</summary>
     </key>
     <key name="popup-width" type="i">
       <range min="420" max="1400"/>
       <default>760</default>
       <summary>Popup width in pixels</summary>
     </key>
-    <key name="show-recent" type="b">
+    <key name="popup-top" type="i">
+      <range min="5" max="60"/>
+      <default>12</default>
+      <summary>Popup distance from the top of the screen (percent)</summary>
+    </key>
+    <key name="show-hints" type="b">
       <default>true</default>
-      <summary>Show recent files when the search box is empty</summary>
+      <summary>Show the keyboard hint line</summary>
+    </key>
+    <key name="animations" type="b">
+      <default>true</default>
+      <summary>Fade the popup in when it opens</summary>
+    </key>
+
+    <key name="apps-in-all" type="i">
+      <range min="0" max="30"/>
+      <default>8</default>
+      <summary>Applications shown in the All tab while searching</summary>
+    </key>
+    <key name="frequent-count" type="i">
+      <range min="0" max="20"/>
+      <default>6</default>
+      <summary>Frequently used applications shown when the search box is empty</summary>
+    </key>
+    <key name="recent-count" type="i">
+      <range min="0" max="50"/>
+      <default>25</default>
+      <summary>Recent files shown when the search box is empty</summary>
     </key>
     <key name="debounce-ms" type="i">
       <range min="0" max="1000"/>

@@ -11,12 +11,7 @@ import St from 'gi://St';
 import {Extension} from 'resource:///org/gnome/shell/extensions/extension.js';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import * as Lib from './lib.js';
-
-// ---------------------------------------------------------------------------
-// Shared extension body (identical for every supported GNOME Shell version).
-// build.py prepends the version specific imports and appends the entry point.
-// Expects in scope: Clutter, Gio, GLib, Meta, Pango, Shell, St, Main, Lib.
-// ---------------------------------------------------------------------------
+import * as Colors from './colors.js';
 
 const MODES = ['all', 'files', 'apps', 'content'];
 const MODE_LABELS = {all: 'All', files: 'Files', apps: 'Apps', content: 'Content'};
@@ -52,8 +47,9 @@ function _appItem(info) {
 }
 
 class AexPopup {
-    constructor(settings) {
+    constructor(settings, openPrefs) {
         this._settings = settings;
+        this._openPrefs = openPrefs;
         this._isOpen = false;
         this._mode = 'all';
         this._token = 0;
@@ -70,7 +66,9 @@ class AexPopup {
         this._debounceId = 0;
         this._flushId = 0;
         this._renderId = 0;
+        this._running = false;
         this._grab = null;
+        this._pal = null;
     }
 
     get isOpen() {
@@ -117,12 +115,14 @@ class AexPopup {
         this._grab = grab;
         this._isOpen = true;
 
-        this._backdrop.opacity = 0;
-        this._backdrop.ease({
-            opacity: 255,
-            duration: 110,
-            mode: Clutter.AnimationMode.EASE_OUT_QUAD,
-        });
+        if (this._settings.get_boolean('animations')) {
+            this._backdrop.opacity = 0;
+            this._backdrop.ease({
+                opacity: 255,
+                duration: 110,
+                mode: Clutter.AnimationMode.EASE_OUT_QUAD,
+            });
+        }
         this._entry.grab_key_focus();
         this._refreshTabs();
         this._search();
@@ -152,6 +152,8 @@ class AexPopup {
         this._entry = null;
         this._scroll = null;
         this._list = null;
+        this._tabs = null;
+        this._pal = null;
         this._rows = [];
         this._items = [];
         this._sel = -1;
@@ -173,24 +175,54 @@ class AexPopup {
         this._scheduleSearch(true);
     }
 
-    // ------------------------------------------------------------ UI
-
-    _isLight() {
-        const theme = this._settings.get_string('theme');
-        if (theme === 'light')
-            return true;
-        if (theme === 'dark')
-            return false;
+    _openSettings() {
+        this.close();
         try {
-            const iface = new Gio.Settings({schema_id: 'org.gnome.desktop.interface'});
-            return iface.get_string('color-scheme') !== 'prefer-dark';
-        } catch (_e) {
-            return false;
+            this._openPrefs?.();
+        } catch (e) {
+            console.error(`Aex Search: cannot open preferences: ${e}`);
         }
     }
 
+    // ------------------------------------------------------------ theme
+
+    // Returns {light, pal}. `pal` is only set for the custom theme and carries the
+    // colors that the stylesheet cannot know about.
+    _resolveTheme() {
+        const theme = this._settings.get_string('theme');
+        if (theme === 'custom') {
+            const pal = Colors.buildPalette(
+                this._settings.get_string('custom-bg'),
+                this._settings.get_string('custom-accent'));
+            return {light: pal.light, pal};
+        }
+        if (theme === 'light')
+            return {light: true, pal: null};
+        if (theme === 'dark')
+            return {light: false, pal: null};
+        try {
+            const iface = new Gio.Settings({schema_id: 'org.gnome.desktop.interface'});
+            return {light: iface.get_string('color-scheme') !== 'prefer-dark', pal: null};
+        } catch (_e) {
+            return {light: false, pal: null};
+        }
+    }
+
+    // Applies a custom-theme text tone (muted / faint) to an actor; no-op for built-in themes.
+    _tone(actor, tone) {
+        if (this._pal)
+            actor.set_style(`color: ${this._pal[tone]};`);
+        return actor;
+    }
+
+    // ------------------------------------------------------------ UI
+
     _buildUi(monitor) {
-        const width = Math.min(this._settings.get_int('popup-width'), monitor.width - 40);
+        const s = this._settings;
+        const {light, pal} = this._resolveTheme();
+        this._pal = pal;
+
+        const width = Math.min(s.get_int('popup-width'), monitor.width - 40);
         const listHeight = Math.max(200, Math.min(480, Math.floor(monitor.height * 0.5)));
 
         this._backdrop = new St.Widget({
@@ -201,27 +233,24 @@ class AexPopup {
             width: monitor.width,
             height: monitor.height,
         });
-        this._backdrop.connect('button-press-event', (_a, event) => {
-            if (event.get_source() === this._backdrop) {
-                this.close();
-                return Clutter.EVENT_STOP;
-            }
-            return Clutter.EVENT_PROPAGATE;
-        });
+        // Any press that lands outside the card closes the popup.
+        this._backdrop.connect('captured-event', (_a, event) => this._onBackdropEvent(event));
 
         this._card = new St.BoxLayout({
-            style_class: `aex-card${this._isLight() ? ' aex-light' : ''}`,
+            style_class: `aex-card${light ? ' aex-light' : ''}`,
             vertical: true,
             reactive: true,
             width,
         });
+        if (pal)
+            this._card.set_style(`background-color: ${pal.bg}; color: ${pal.text}; border-color: ${pal.border};`);
         this._card.set_position(
             Math.round(monitor.x + (monitor.width - width) / 2),
-            Math.round(monitor.y + monitor.height * 0.12));
+            Math.round(monitor.y + monitor.height * s.get_int('popup-top') / 100));
         this._backdrop.add_child(this._card);
 
-        // Mode tabs
-        const tabs = new St.BoxLayout({style_class: 'aex-tabs'});
+        // Mode tabs + settings button (top right)
+        const tabs = new St.BoxLayout({style_class: 'aex-tabs', x_expand: true});
         this._tabs = {};
         for (const mode of MODES) {
             const btn = new St.Button({
@@ -234,6 +263,20 @@ class AexPopup {
             this._tabs[mode] = btn;
             tabs.add_child(btn);
         }
+        tabs.add_child(new St.Widget({x_expand: true}));
+        const gear = new St.Button({
+            style_class: 'aex-icon-button',
+            can_focus: false,
+            reactive: true,
+            accessible_name: 'Settings',
+            y_align: Clutter.ActorAlign.CENTER,
+        });
+        gear.set_child(this._tone(new St.Icon({
+            icon_name: 'preferences-system-symbolic',
+            style_class: 'aex-icon-button-icon',
+        }), 'muted'));
+        gear.connect('clicked', () => this._openSettings());
+        tabs.add_child(gear);
         this._card.add_child(tabs);
 
         // Entry
@@ -243,6 +286,12 @@ class AexPopup {
             can_focus: true,
             x_expand: true,
         });
+        if (pal) {
+            this._entry.set_style(
+                `background-color: ${pal.soft}; color: ${pal.text}; caret-color: ${pal.text}; ` +
+                `border-color: ${pal.border}; selection-background-color: ${pal.accent}; ` +
+                `selected-color: ${pal.onAccent};`);
+        }
         this._entry.set_primary_icon(new St.Icon({
             icon_name: 'system-search-symbolic',
             style_class: 'aex-entry-icon',
@@ -261,33 +310,57 @@ class AexPopup {
             x_expand: true,
             height: listHeight,
         });
-        if (typeof this._scroll.set_child === 'function')
-            this._scroll.set_child(this._list);
-        else
-            this._scroll.add_actor(this._list);
+        this._scroll.set_child(this._list);
         this._card.add_child(this._scroll);
 
         // Footer
-        this._pathLabel = new St.Label({style_class: 'aex-path-label', text: ' '});
+        this._pathLabel = this._tone(new St.Label({style_class: 'aex-path-label', text: ' '}), 'muted');
         this._pathLabel.clutter_text.ellipsize = Pango.EllipsizeMode.MIDDLE;
         this._card.add_child(this._pathLabel);
 
         const foot = new St.BoxLayout({style_class: 'aex-footer'});
-        this._statusLabel = new St.Label({style_class: 'aex-status', x_expand: true, text: ''});
+        this._statusLabel = this._tone(
+            new St.Label({style_class: 'aex-status', x_expand: true, text: ''}), 'faint');
         this._statusLabel.clutter_text.ellipsize = Pango.EllipsizeMode.END;
-        const hint = new St.Label({style_class: 'aex-hint', text: HINTS});
-        hint.clutter_text.ellipsize = Pango.EllipsizeMode.END;
         foot.add_child(this._statusLabel);
         this._card.add_child(foot);
-        this._card.add_child(hint);
+
+        if (s.get_boolean('show-hints')) {
+            const hint = this._tone(new St.Label({style_class: 'aex-hint', text: HINTS}), 'faint');
+            hint.clutter_text.ellipsize = Pango.EllipsizeMode.END;
+            this._card.add_child(hint);
+        }
+    }
+
+    _onBackdropEvent(event) {
+        const type = event.type();
+        if (type !== Clutter.EventType.BUTTON_PRESS && type !== Clutter.EventType.TOUCH_BEGIN)
+            return Clutter.EVENT_PROPAGATE;
+        if (!this._card)
+            return Clutter.EVENT_PROPAGATE;
+        const [x, y] = event.get_coords();
+        const [cx, cy] = this._card.get_transformed_position();
+        const [cw, ch] = this._card.get_transformed_size();
+        if (x >= cx && x <= cx + cw && y >= cy && y <= cy + ch)
+            return Clutter.EVENT_PROPAGATE;
+        this.close();
+        return Clutter.EVENT_STOP;
     }
 
     _refreshTabs() {
+        const pal = this._pal;
         for (const mode of MODES) {
-            if (mode === this._mode)
-                this._tabs[mode].add_style_pseudo_class('active');
+            const tab = this._tabs[mode];
+            const active = mode === this._mode;
+            if (active)
+                tab.add_style_pseudo_class('active');
             else
-                this._tabs[mode].remove_style_pseudo_class('active');
+                tab.remove_style_pseudo_class('active');
+            if (pal) {
+                tab.set_style(active
+                    ? `color: ${pal.onAccent}; background-color: ${pal.accent};`
+                    : `color: ${pal.muted};`);
+            }
         }
     }
 
@@ -350,6 +423,10 @@ class AexPopup {
             break;
         }
 
+        if (ctrl && sym === Clutter.KEY_comma) {
+            this._openSettings();
+            return Clutter.EVENT_STOP;
+        }
         if (ctrl && (sym === Clutter.KEY_n || sym === Clutter.KEY_N)) {
             this._move(1);
             return Clutter.EVENT_STOP;
@@ -387,8 +464,12 @@ class AexPopup {
     }
 
     _select(index) {
-        if (this._sel >= 0 && this._rows[this._sel])
-            this._rows[this._sel].remove_style_pseudo_class('selected');
+        if (this._sel >= 0 && this._rows[this._sel]) {
+            const prev = this._rows[this._sel];
+            prev.remove_style_pseudo_class('selected');
+            if (this._pal)
+                prev.set_style(null);
+        }
         this._sel = index;
         const row = this._rows[index];
         const item = this._items[index];
@@ -398,6 +479,8 @@ class AexPopup {
             return;
         }
         row.add_style_pseudo_class('selected');
+        if (this._pal)
+            row.set_style(`background-color: ${this._pal.selected};`);
         this._selKey = this._itemKey(item);
         this._pathLabel.text = item.kind === 'app'
             ? (item.info.get_filename?.() ?? item.id)
@@ -502,7 +585,7 @@ class AexPopup {
         }
 
         if (this._mode === 'all' || this._mode === 'apps')
-            this._appItems = this._searchApps(this._mode === 'apps' ? 200 : 8);
+            this._appItems = this._searchApps(this._mode === 'apps' ? 200 : s.get_int('apps-in-all'));
         if (this._mode === 'apps') {
             this._publish(true);
             return;
@@ -554,6 +637,8 @@ class AexPopup {
     }
 
     _frequentApps(n) {
+        if (n <= 0)
+            return [];
         try {
             const out = [];
             for (const app of Shell.AppUsage.get_default().get_most_used()) {
@@ -572,6 +657,8 @@ class AexPopup {
     // ------------------------------------------------------------ recent files
 
     _recentFiles(n) {
+        if (n <= 0)
+            return [];
         if (!this._recentCache) {
             this._recentCache = [];
             try {
@@ -589,30 +676,29 @@ class AexPopup {
         return this._recentCache.slice(0, n);
     }
 
+    // Empty search box: one flat list, no section headings.
     _showEmpty() {
+        const s = this._settings;
         const mode = this._mode;
-        let list = [];
-        let label = null;
         if (mode === 'content') {
             this._showMessage('Type to search inside the text of your files.');
             this._statusLabel.text = '';
             return;
         }
+        let list = [];
         if (mode === 'apps') {
             list = this._allApps().slice(0, 300);
         } else {
             if (mode === 'all')
-                list.push(...this._frequentApps(6));
-            if (this._settings.get_boolean('show-recent'))
-                list.push(...this._recentFiles(25));
-            label = {app: 'Frequently used', file: 'Recent files'};
+                list.push(...this._frequentApps(s.get_int('frequent-count')));
+            list.push(...this._recentFiles(s.get_int('recent-count')));
         }
         if (!list.length) {
             this._showMessage('Start typing to search.');
             this._statusLabel.text = '';
             return;
         }
-        this._renderList(list, label);
+        this._renderList(list);
         this._statusLabel.text = '';
     }
 
@@ -821,7 +907,7 @@ class AexPopup {
         if (!list.length && (final || !this._running)) {
             this._showMessage(this._toolName ? 'No results.' : (this._toolNote || 'No results.'));
         } else if (list.length) {
-            this._renderList(list, null);
+            this._renderList(list);
         }
         const n = list.length;
         let text = `${n} result${n === 1 ? '' : 's'}`;
@@ -859,18 +945,12 @@ class AexPopup {
     _showMessage(text) {
         this._clearList();
         this._pathLabel.text = ' ';
-        this._list.add_child(new St.Label({style_class: 'aex-message', text}));
+        this._list.add_child(this._tone(new St.Label({style_class: 'aex-message', text}), 'muted'));
     }
 
-    // headerLabels: optional {app, file} section titles; default titles are used when
-    // the list mixes applications and files.
-    _renderList(list, headerLabels) {
+    // One flat list: no section headings, the badge on each row says what it is.
+    _renderList(list) {
         this._clearList();
-        const hasApps = list.some(i => i.kind === 'app');
-        const hasOther = list.some(i => i.kind !== 'app');
-        this._wantHeaders = this._mode === 'all' && hasApps && hasOther;
-        this._headerLabels = headerLabels ?? {app: 'Applications', file: 'Files & folders'};
-        this._lastGroup = null;
         this._pending = list.slice();
 
         this._renderBatch(40);
@@ -894,14 +974,6 @@ class AexPopup {
         const words = this._words;
         for (let n = 0; n < count && this._pending.length; n++) {
             const item = this._pending.shift();
-            const group = item.kind === 'app' ? 'app' : 'file';
-            if (this._wantHeaders && group !== this._lastGroup) {
-                this._list.add_child(new St.Label({
-                    style_class: 'aex-section',
-                    text: this._headerLabels[group],
-                }));
-            }
-            this._lastGroup = group;
             const row = this._makeRow(item, words);
             this._list.add_child(row);
             this._rows.push(row);
@@ -909,10 +981,12 @@ class AexPopup {
         }
     }
 
-    _label(markup, styleClass, ellipsize) {
+    _label(markup, styleClass, ellipsize, tone) {
         const label = new St.Label({style_class: styleClass});
         label.clutter_text.ellipsize = ellipsize ?? Pango.EllipsizeMode.END;
         label.clutter_text.set_markup(markup);
+        if (tone)
+            this._tone(label, tone);
         return label;
     }
 
@@ -944,7 +1018,7 @@ class AexPopup {
             col.add_child(this._label(Lib.highlightMarkup(item.name, words, cs), 'aex-title'));
             const sub = item.description || item.generic;
             if (sub)
-                col.add_child(this._label(Lib.highlightMarkup(sub, words, cs), 'aex-subtitle'));
+                col.add_child(this._label(Lib.highlightMarkup(sub, words, cs), 'aex-subtitle', null, 'muted'));
             badgeText = 'App';
         } else {
             const name = Lib.basename(item.path);
@@ -952,14 +1026,14 @@ class AexPopup {
                 col.add_child(this._label(
                     `${Lib.escapeMarkup(name)}<span alpha="60%">  :${item.line}</span>`, 'aex-title'));
                 col.add_child(this._label(
-                    Lib.highlightMarkup(item.text, words, cs), 'aex-snippet'));
+                    Lib.highlightMarkup(item.text, words, cs), 'aex-snippet', null, 'muted'));
                 col.add_child(this._label(
-                    Lib.escapeMarkup(item.path), 'aex-subtitle', Pango.EllipsizeMode.MIDDLE));
+                    Lib.escapeMarkup(item.path), 'aex-subtitle', Pango.EllipsizeMode.MIDDLE, 'muted'));
             } else {
                 col.add_child(this._label(Lib.highlightMarkup(name, words, cs), 'aex-title'));
                 col.add_child(this._label(
                     Lib.highlightMarkup(item.path, words, cs, item.rel ?? 0), 'aex-subtitle',
-                    Pango.EllipsizeMode.MIDDLE));
+                    Pango.EllipsizeMode.MIDDLE, 'muted'));
             }
             const ext = Lib.extension(item.path);
             badgeText = ext && ext.length <= 5 ? ext.toUpperCase() : 'File';
@@ -970,6 +1044,8 @@ class AexPopup {
             text: badgeText,
             y_align: Clutter.ActorAlign.CENTER,
         });
+        if (this._pal)
+            badge.set_style(`color: ${this._pal.muted}; background-color: ${this._pal.soft};`);
         box.add_child(icon);
         box.add_child(col);
         box.add_child(badge);
@@ -1024,6 +1100,7 @@ class AexPopup {
             else
                 this._openPath(item.path);
         } catch (e) {
+            console.error(`Aex Search: action failed: ${e}`);
             Main.notifyError('Aex Search', `${e.message ?? e}`);
         }
     }
@@ -1058,6 +1135,7 @@ class AexPopup {
                     try {
                         this._openPath(Lib.dirname(path));
                     } catch (e) {
+                        console.error(`Aex Search: reveal failed: ${e}`);
                         Main.notifyError('Aex Search', `${e.message ?? e}`);
                     }
                 }
@@ -1072,9 +1150,9 @@ class AexPopup {
 }
 
 class AexController {
-    constructor(settings) {
+    constructor(settings, openPrefs) {
         this._settings = settings;
-        this._popup = new AexPopup(settings);
+        this._popup = new AexPopup(settings, openPrefs);
         this._bound = [];
     }
 
@@ -1099,7 +1177,7 @@ class AexController {
 
 export default class AexSearchExtension extends Extension {
     enable() {
-        this._controller = new AexController(this.getSettings());
+        this._controller = new AexController(this.getSettings(), () => this.openPreferences());
         this._controller.enable();
     }
 
