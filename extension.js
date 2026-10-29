@@ -291,6 +291,7 @@ class AexPopup {
                 `background-color: ${pal.soft}; color: ${pal.text}; caret-color: ${pal.text}; ` +
                 `border-color: ${pal.border}; selection-background-color: ${pal.accent}; ` +
                 `selected-color: ${pal.onAccent};`);
+            this._entry.get_hint_actor?.()?.set_style(`color: ${pal.faint};`);
         }
         this._entry.set_primary_icon(new St.Icon({
             icon_name: 'system-search-symbolic',
@@ -352,10 +353,12 @@ class AexPopup {
         for (const mode of MODES) {
             const tab = this._tabs[mode];
             const active = mode === this._mode;
+            // A style class, not the 'active' pseudo-class: St.Button resets that one
+            // itself every time it is clicked, which made the highlight vanish.
             if (active)
-                tab.add_style_pseudo_class('active');
+                tab.add_style_class_name('aex-tab-active');
             else
-                tab.remove_style_pseudo_class('active');
+                tab.remove_style_class_name('aex-tab-active');
             if (pal) {
                 tab.set_style(active
                     ? `color: ${pal.onAccent}; background-color: ${pal.accent};`

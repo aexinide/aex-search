@@ -25,10 +25,10 @@
     font-size: 10pt;
 }
 .aex-tab:hover { background-color: rgba(255, 255, 255, 0.08); }
-.aex-tab:active { color: #ffffff; background-color: #3584e4; }
+.aex-tab.aex-tab-active { color: #ffffff; background-color: rgba(255, 255, 255, 0.16); }
 .aex-light .aex-tab { color: #5f5f68; }
 .aex-light .aex-tab:hover { background-color: rgba(0, 0, 0, 0.07); }
-.aex-light .aex-tab:active { color: #ffffff; background-color: #3584e4; }
+.aex-light .aex-tab.aex-tab-active { color: #1d1d20; background-color: rgba(0, 0, 0, 0.09); }
 
 /* Settings button, top right */
 .aex-icon-button {
@@ -46,7 +46,7 @@
     background-color: rgba(255, 255, 255, 0.08);
     color: #ffffff;
     caret-color: #ffffff;
-    selection-background-color: #3584e4;
+    selection-background-color: rgba(255, 255, 255, 0.28);
     selected-color: #ffffff;
     border: 1px solid rgba(255, 255, 255, 0.10);
     border-radius: 10px;
@@ -58,16 +58,20 @@
     border-color: rgba(255, 255, 255, 0.10);
     box-shadow: none;
 }
+.aex-entry .hint-text { color: rgba(255, 255, 255, 0.70); }
 .aex-light .aex-entry {
     background-color: rgba(0, 0, 0, 0.05);
     color: #1d1d20;
     caret-color: #1d1d20;
+    selection-background-color: rgba(0, 0, 0, 0.15);
+    selected-color: #1d1d20;
     border: 1px solid rgba(0, 0, 0, 0.12);
 }
 .aex-light .aex-entry:focus {
     border-color: rgba(0, 0, 0, 0.12);
     box-shadow: none;
 }
+.aex-light .aex-entry .hint-text { color: rgba(0, 0, 0, 0.55); }
 .aex-entry-icon { icon-size: 18px; margin-right: 8px; }
 
 .aex-scroll { padding: 0; }
@@ -78,9 +82,9 @@
     padding: 6px 10px;
 }
 .aex-row:hover { background-color: rgba(255, 255, 255, 0.07); }
-.aex-row:selected { background-color: rgba(53, 132, 228, 0.45); }
+.aex-row:selected { background-color: rgba(255, 255, 255, 0.13); }
 .aex-light .aex-row:hover { background-color: rgba(0, 0, 0, 0.06); }
-.aex-light .aex-row:selected { background-color: rgba(53, 132, 228, 0.22); }
+.aex-light .aex-row:selected { background-color: rgba(0, 0, 0, 0.08); }
 
 .aex-row-box { spacing: 12px; }
 .aex-row-icon { icon-size: 28px; }
